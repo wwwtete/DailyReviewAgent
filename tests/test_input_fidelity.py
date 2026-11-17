@@ -79,6 +79,21 @@ class FidelityIntegrationTests(unittest.TestCase):
         result=build_report(self.store,cfg,Policy({}),'2026-11-15',self.root/'reports',model)
         self.assertFalse(result['ok'])
 
+    def test_flexible_report_still_requires_literal_fact_evidence(self):
+        from daily_review.report import CLAIM_AUDIT
+        cfg={**self.cfg,'model':{'audit_reports':True}}
+        body='### 当前状态\n\n仅为AI建议，尚未实施。\n\n## 后续方法\n\n暂无'
+        for quote in ('仅为AI建议，尚未实施。','不存在的验收结果'):
+            with self.subTest(quote=quote):
+                def model(prompt):
+                    if prompt.startswith(CLAIM_AUDIT):
+                        return json.dumps({'passed':True,'reason':'检查事实',
+                            'claims':[{'text':'仅为AI建议，尚未实施。','evidence_ids':[self.e['id']],'quote':quote}]})
+                    return json.dumps({'report_markdown':body,'actions':[],'lessons':[]})
+                result=build_report(self.store,cfg,Policy({}),'2026-11-15',self.root/'reports',model)
+                self.assertEqual(result['ok'],quote=='仅为AI建议，尚未实施。',result)
+                self.store.db.execute('DELETE FROM reports');self.store.db.commit()
+
     def test_failed_semantic_audit_regenerates_once_then_reaudits(self):
         cfg={**self.cfg,'model':{'audit_reports':True}}
         outputs=iter([{'report_markdown':'暂无可复盘的工作事项。','actions':[],'lessons':[]},

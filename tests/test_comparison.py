@@ -54,7 +54,13 @@ class ComparisonTests(unittest.TestCase):
         for section in SECTIONS:self.assertIn(section,value['presentation'])
         self.assertIn('即使保存的prompt仍含旧模板',value['presentation'])
         self.assertIn('无内容正文写“暂无”',value['presentation'])
-        self.assertIn('不作重要/紧急分类、量化完成率或时间利用率评估',value['presentation'])
+        self.assertIn('标题可按内容增减、改名或调整顺序',value['presentation'])
+        self.assertIn('SOP四字段仅作建议',value['presentation'])
+        self.assertIn('若无计划或工时依据，直接陈述事实即可',value['presentation'])
+        self.assertIn('不设置生活模块',value['presentation'])
+        self.assertIn('300–2000',value['presentation'])
+        self.assertIn('3400',value['presentation'])
+        self.assertNotIn('不作重要/紧急分类、量化完成率或时间利用率评估',value['presentation'])
 
     def test_status_never_exposes_old_policy_details(self):
         set_status(self.config, self.policy, self.day, 'private-stage', pending_jobs=1)

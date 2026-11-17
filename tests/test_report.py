@@ -206,22 +206,35 @@ class ReportTests(unittest.TestCase):
             self.assertFalse(r['ok']);self.assertLess(len(body),500)
             self.assertNotIn('RAW_LOG_',body);s.close()
 
-    def test_old_report_format_is_rejected(self):
-        with self.assertRaises(ValueError):
-            parse_report(json.dumps({'report_markdown':'## 今日概览\n流水账','actions':[]}),set())
+    def test_report_accepts_content_based_headings_and_order(self):
+        for body in ('## 今日成果\n\n完成文案修正。',
+                     '已完成文案修正，页面显示已确认。',
+                     '### AI协作\n\n暂无\n\n### 工作结果\n\n完成文案修正。',
+                     report_body().split('## 🤖 AI 使用方式总结与提升')[0],
+                     report_body().replace('## 📌 今日关键战报','## 📌 工作结果')+'\n\n## 待确认事项\n\n暂无'):
+            with self.subTest(body=body):
+                result=parse_report(json.dumps({'report_markdown':body,'actions':[],'lessons':[]}),set())
+                self.assertEqual(result['report_markdown'],body.strip())
 
-    def test_ai_usage_accepts_summary_or_explicit_empty_and_rejects_old_module(self):
+    def test_ai_usage_accepts_summary_or_explicit_empty(self):
         for content in ('暂无', '你已将问题链接直接交给Codex读取；下次可复用同样的输入方式。'):
             with self.subTest(content=content):
                 body=report_body(ai_usage=content)
                 result=parse_report(json.dumps({'report_markdown':body,'lessons':[],'actions':[]}),set())
                 self.assertTrue(result['report_markdown'].endswith(content))
-        invalid=(report_body(ai_usage=''),
-                 report_body().split('## 🤖 AI 使用方式总结与提升')[0],
-                 report_body().replace('🤖 AI 使用方式总结与提升','🌿 生活与精力管理建议'))
-        for body in invalid:
+
+    def test_flexible_structure_keeps_json_and_action_evidence_checks(self):
+        for body in (None, '', '   '):
             with self.subTest(body=body),self.assertRaises(ValueError):
-                parse_report(json.dumps({'report_markdown':body,'lessons':[],'actions':[]}),set())
+                parse_report(json.dumps({'report_markdown':body,'actions':[]}),set())
+        with self.assertRaises(ValueError):
+            parse_report('正文不是JSON',set())
+        action={'title':'核验','trigger':'下次任务','step':'执行验证','success':'符合预期',
+                'review_date':'2026-11-18','evidence_ids':['manual:missing']}
+        with self.assertRaisesRegex(ValueError,'unsupported evidence'):
+            parse_report(json.dumps({'report_markdown':'## 自定义成果\n完成工作。','actions':[action]}),set())
+        with self.assertRaisesRegex(ValueError,'cannot invent'):
+            parse_report(json.dumps({'report_markdown':'暂无可复盘的工作事项。','lessons':['无依据经验']}),set())
 
     def test_ai_usage_fact_is_audited_and_empty_ai_usage_is_not_a_claim(self):
         from daily_review.report import CLAIM_AUDIT
@@ -247,11 +260,11 @@ class ReportTests(unittest.TestCase):
                 self.assertTrue(Path(result['path']).read_text().split('[查看来源')[0].strip().endswith(ai_usage))
 
     def test_all_empty_module_boundaries_pass_audit_without_invented_claims(self):
-        from daily_review.report import SECTIONS,CLAIM_AUDIT
+        from daily_review.report import CLAIM_AUDIT
         with tempfile.TemporaryDirectory() as t:
             store=Store(Path(t)/'db.sqlite');self.addCleanup(store.close)
             store.put(make_event('manual','noise','2026-11-10T10:00:00+08:00','记录','无关通知'))
-            body='\n\n'.join('## '+section+'\n\n暂无' for section in SECTIONS)
+            body='### AI协作\n\n暂无\n\n# 工作结果\n\n暂无'
             def model(prompt):
                 return json.dumps({'passed':True,'reason':'没有事实断言','claims':[]} if prompt.startswith(CLAIM_AUDIT)
                                   else {'report_markdown':body,'lessons':[],'actions':[]})
