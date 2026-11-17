@@ -1,0 +1,62 @@
+# Local configuration and generated service definitions
+/config.json
+/config.local*.json
+/*.local.json
+/background-check.json
+/*.plist
+
+# Private collected records, reports, research artifacts, and backups
+/runtime/
+/reports/
+/artifacts/
+/backups/
+/installed
+*.private.*
+
+# Credentials and environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+credentials.json
+auth.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python environments, bytecode, and test/build output
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Databases, logs, temporary files, and local editor state
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-*
+*.log
+*.lock
+*.tmp
+*.stage
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/

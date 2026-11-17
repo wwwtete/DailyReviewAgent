@@ -1,0 +1,76 @@
+{
+  "timezone": "Asia/Shanghai",
+  "collection_enabled": false,
+  "schedule": {
+    "hour": 8,
+    "minute": 0,
+    "catchup_days": 3
+  },
+  "blacklist": {
+    "sources": [],
+    "paths": [],
+    "names": [],
+    "codex_ids": [],
+    "project_ids": [],
+    "lark_chat_ids": [],
+    "lark_ids": [],
+    "domains": [],
+    "urls": [],
+    "git_remotes": [],
+    "browser_profiles": []
+  },
+  "sources": {
+    "codex": {
+      "enabled": true,
+      "home": "~/.codex",
+      "mode": "archive"
+    },
+    "lark": {
+      "enabled": true,
+      "binary": "lark-cli",
+      "messages": true,
+      "tasks": true,
+      "calendar": true,
+      "meetings": true
+    },
+    "git": {
+      "enabled": true,
+      "binary": "git",
+      "roots": [
+        "~"
+      ],
+      "discover_from_codex": true,
+      "codex_home": "~/.codex"
+    },
+    "browser": {
+      "enabled": false,
+      "discover": true,
+      "profiles": []
+    }
+  },
+  "model": {
+    "name": "gpt-6.1-sol",
+    "from_codex_config": true,
+    "codex_config": "~/.codex/config.toml",
+    "reasoning_effort": "medium",
+    "chunk_chars": 35000,
+    "max_event_chars": 6000,
+    "timeout_seconds": 180
+  },
+  "identity": {
+    "lark_open_id": "",
+    "display_name": "",
+    "git_email": "",
+    "git_name": ""
+  },
+  "archive": {
+    "chunk_chars": 30000,
+    "max_jobs": 12,
+    "max_run_jobs": 48,
+    "max_run_seconds": 240
+  },
+  "desktop": {
+    "notify": true,
+    "open_typora": true
+  }
+}
