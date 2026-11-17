@@ -52,6 +52,44 @@ class WorkerTests(unittest.TestCase):
         item=research.list_items(self.store)[0]
         self.assertEqual(item['id'],key);self.assertEqual(item['status'],'pending');self.assertEqual(item['attempts'],1)
 
+    def test_malformed_json_gets_one_protocol_repair(self):
+        from daily_review.research import _json_model
+        calls=[]
+        def model(prompt):
+            calls.append(prompt)
+            return '{"stop":"暂不具备条件"}\n{"extra":true}' if len(calls)==1 else '{"stop":"暂不具备条件"}'
+        value=_json_model(model,'研究请求')
+        self.assertEqual(json.loads(value), {'stop':'暂不具备条件'})
+        self.assertEqual(len(calls),2)
+
+    def test_repeated_malformed_json_stops_and_preserves_failure_response(self):
+        from daily_review.research import _json_model
+        calls=[]
+        raw='{"tool":"read_file"}{"tool":"read_file"}'
+        def model(prompt): calls.append(prompt);return raw
+        with self.assertRaises(json.JSONDecodeError):
+            _json_model(model,'研究请求',str(self.root))
+        self.assertEqual(len(calls),2)
+        logs=list((self.root/'runtime/research-failures').glob('*.json'))
+        self.assertEqual(len(logs),1)
+        self.assertEqual(json.loads(logs[0].read_text())['response'],raw)
+
+    def test_research_context_budget_is_checked_after_lossless_packing(self):
+        from daily_review.research import _bounded_events
+        from daily_review import source_facts
+        events=[make_event('manual',str(i),'2026-11-11T12:00:00+08:00','事实','x'*1800,
+                           path=str(self.root)) for i in range(180)]
+        bounded=_bounded_events([events[0]],events,120000)
+        packed=source_facts.pack(source_facts.fragments(bounded,8666))
+        self.assertLessEqual(len(source_facts.encode(packed).encode('utf-8')),120000)
+        self.assertEqual(bounded[0]['id'],events[0]['id'])
+        self.assertLess(len(bounded),len(events))
+
+    def test_large_direct_evidence_is_never_discarded_to_fit_budget(self):
+        from daily_review.research import _bounded_events
+        seed={**self.e,'body':'必须保留的直接证据。'*15000}
+        self.assertEqual(_bounded_events([seed],[seed,self.e],1000),[seed])
+
     def test_launchd_research_uses_independent_process_and_lock(self):
         from unittest.mock import patch
         from daily_review.research_install import definition

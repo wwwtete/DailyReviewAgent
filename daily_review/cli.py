@@ -366,10 +366,8 @@ def main():
                     from .research import work
                     through = args.date or (now.date() - timedelta(days=1)).isoformat()
                     result = work(config, store, policy, through)
-                    from .blocking import record_failure
-                    failed = bool(result.get('error') or result.get('discovery_error'))
-                    if failed or result.get('processed') or result.get('discovered_facts'):
-                        record_failure(store, 'research', failed)
+                    from .blocking import record_research_result
+                    record_research_result(store, result)
                 elif args.cmd == "research-status":
                     from .research import list_items, _permitted
                     items = [x for x in list_items(store) if _permitted(store, config, policy, x)]

@@ -25,6 +25,15 @@ def record_failure(store, stage, failed, now=None):
         store.db.execute('DELETE FROM state WHERE key=?', (key,)); store.db.commit()
 
 
+def record_research_result(store, result, now=None):
+    # A failure in one opportunity must not count as a retry of another.
+    record_failure(store, 'research', False, now=now)
+    if result.get('id') and (result.get('error') or result.get('processed')):
+        record_failure(store, 'research:'+result['id'], bool(result.get('error')), now=now)
+    if result.get('discovery_error') or 'discovered_facts' in result:
+        record_failure(store, 'research:discovery', bool(result.get('discovery_error')), now=now)
+
+
 def check(config, store, policy, runner=None, now=None):
     now = time.time() if now is None else now
     if not config.get('collection_enabled') or not config.get('desktop', {}).get('notify', True):
@@ -63,12 +72,21 @@ def check(config, store, policy, runner=None, now=None):
                 blockers.add('归档后台超过 30 分钟未更新')
     for key, raw in store.db.execute("SELECT key,value FROM state WHERE key LIKE 'blocking_phase:%'").fetchall():
         phase = json.loads(raw)
+        if phase.get('attempts', 0)<3 or now-phase['first_at']<1800: continue
+        reason='后台任务连续执行失败' if key.startswith('blocking_phase:runtime:') else '日报分析连续重试失败'
+        if key=='blocking_phase:research': reason='研究任务连续重试失败'
+        if key=='blocking_phase:research:discovery': reason='研究机会发现连续重试失败'
+        if key.startswith('blocking_phase:research:') and not key.endswith(':discovery'):
+            from .research import list_items, _permitted
+            ident=key.split(':',2)[2]
+            item=next((x for x in list_items(store) if x['id']==ident),None)
+            if not item or item['status'] not in ('pending','researching') or not _permitted(store,config,policy,item):
+                continue
+            reason='研究「'+item['title']+'」连续重试失败：'+item.get('last_error','未知错误')[:160]
         if key.startswith('blocking_phase:report:') and store.db.execute(
                 'SELECT 1 FROM reports WHERE day=?', (key.rsplit(':', 1)[1],)).fetchone():
             continue
-        if phase.get('attempts', 0) >= 3 and now - phase['first_at'] >= 1800:
-            blockers.add('研究任务连续重试失败' if key.startswith('blocking_phase:research') else
-                         '后台任务连续执行失败' if key.startswith('blocking_phase:runtime:') else '日报分析连续重试失败')
+        blockers.add(reason)
     from .comparison import source_signature
     signature = source_signature(config, policy)
     for path in (Path(config['_root'])/'runtime/comparison-status').glob('????-??-??.json'):

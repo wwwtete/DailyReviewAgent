@@ -79,6 +79,43 @@ class BlockingTests(unittest.TestCase):
         self.fail(); self.config['desktop'] = {'notify':False}
         self.check(); self.assertEqual(self.calls, [])
 
+    def test_research_failures_are_scoped_to_the_same_item(self):
+        for index, item in enumerate(('item-a', 'item-b', 'item-c')):
+            blocking.record_research_result(self.store, {'id':item,'error':'invalid JSON'},
+                                            now=self.now - 2000 + index)
+        self.assertFalse(self.check()['blocked'])
+        self.assertIsNone(self.store.get('blocking_phase:research'))
+        for item in ('item-a', 'item-b', 'item-c'):
+            self.assertEqual(self.store.get('blocking_phase:research:'+item)['attempts'],1)
+
+    def test_one_research_success_does_not_clear_other_item_failure(self):
+        blocking.record_research_result(self.store, {'id':'failed','error':'invalid JSON'}, now=self.now)
+        blocking.record_research_result(self.store, {'id':'success','processed':1}, now=self.now+1)
+        self.assertEqual(self.store.get('blocking_phase:research:failed')['attempts'],1)
+        self.assertIsNone(self.store.get('blocking_phase:research:success'))
+
+    def test_persistent_research_alert_identifies_item_and_stops_after_recovery(self):
+        from daily_review import research
+        from daily_review.core import make_event
+        self.config['sources']={}
+        event=make_event('manual','research-seed','2026-11-16T10:00:00+08:00','工作','事实')
+        self.store.put(event)
+        key=research.enqueue(self.store,self.config,Policy({}),{
+            'kind':'efficiency','title':'自动核对搜索接口','task_key':'search','goal':'减少重复',
+            'evidence_ids':[event['id']]},[event],'2026-11-16')
+        value=json.loads(self.store.db.execute('SELECT data FROM research_items WHERE id=?',(key,)).fetchone()[0])
+        value['last_error']='JSONDecodeError: Extra data'
+        self.store.db.execute('UPDATE research_items SET data=? WHERE id=?',(json.dumps(value),key));self.store.db.commit()
+        for at in (self.now-2000,self.now-1000,self.now):
+            blocking.record_research_result(self.store,{'id':key,'error':'invalid JSON'},now=at)
+        result=self.check()
+        self.assertTrue(result['blocked'])
+        self.assertIn('自动核对搜索接口',self.calls[0][-1])
+        self.assertIn('JSONDecodeError',self.calls[0][-1])
+        blocking.record_research_result(self.store,{'id':key,'processed':1},now=self.now+1)
+        self.assertFalse(self.check(self.now+2)['blocked'])
+        self.assertEqual(len(self.calls),1)
+
     def test_failed_archive_is_deduplicated_while_retry_is_running_and_blacklist_applies(self):
         self.config['sources'] = {'codex': {'mode':'archive'}}
         archive.init(self.store)
